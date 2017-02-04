@@ -49,55 +49,32 @@ onload = function(){
     attStride[1] = 3;
     attStride[2] = 4;
     attStride[3] = 2;
+
+    var torusData = torus(64, 64, 0.25, 1.0);
+    var tPosition = create_vbo(torusData.p);
+    var tNormal   = create_vbo(torusData.n);
+    var tColor    = create_vbo(torusData.c);
+    var tTextureCoord = create_vbo(torusData.t);
+    var tVBOList  = [tPosition, tNormal, tColor, tTextureCoord];
+    var tIndex    = create_ibo(torusData.i);
     
-    var position = [
-        -1.0 , 1.0, 0.0,
-         1.0, 1.0, 0.0,
-        -1.0, -1.0, 0.0,
-        1.0 , -1.0, 0.0
-    ];
-
-    var normal = [
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0,
-        0.0, 0.0, 1.0
-    ];
-
-    var color = [
-        1.0, 0.0, 0.0, 1.0,
-        0.0, 1.0, 0.0, 1.0,
-        0.0, 0.0, 1.0, 1.0,
-        1.0, 1.0, 1.0, 1.0
-    ];
-
-    var textureCoord = [
-        0.0, 0.0,
-        1.0, 0.0,
-        0.0, 1.0,
-        1.0, 1.0
-    ];
-
-    var index = [
-        0, 1, 2,
-        3, 2, 1
-    ];
-
-    var vPosition = create_vbo(position);
-    var vNormal = create_vbo(normal);
-    var vColor = create_vbo(color);
-    var vTextureCoord = create_vbo(textureCoord);
-    var vVBOList = [vPosition, vNormal, vColor, vTextureCoord];
-    var vIndex = create_ibo(index);
-    set_attribute(vVBOList, attLocation, attStride);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vIndex);
+    var sphereData = sphere(64, 64, 1.0, [1.0, 1.0, 1.0, 1.0]);
+    var sPotision  = create_vbo(sphereData.p);
+    var sNormal    = create_vbo(sphereData.n);
+    var sColor     = create_vbo(sphereData.c);
+    var sTextureCoord = create_vbo(sphereData.t);
+    var sVBOList   = [sPotision, sNormal, sColor, sTextureCoord];
+    var sIndex     = create_ibo(sphereData.i);
 
     // uniformLocationの取得
     var uniLocation = new Array();
     uniLocation[0] = gl.getUniformLocation(prg, 'mvpMatrix');
     uniLocation[1] = gl.getUniformLocation(prg, 'invMatrix');
     uniLocation[2] = gl.getUniformLocation(prg, 'lightDirection');
-    uniLocation[3] = gl.getUniformLocation(prg, 'texture');
+    uniLocation[3] = gl.getUniformLocation(prg, 'useLight');
+    uniLocation[4] = gl.getUniformLocation(prg, 'texture');
+    uniLocation[5] = gl.getUniformLocation(prg, 'useTexture');
+    uniLocation[6] = gl.getUniformLocation(prg, 'outline');
 
     // minMatrix.js を用いた行列関連処理
     // matIVオブジェクトを生成
@@ -117,16 +94,21 @@ onload = function(){
     gl.depthFunc(gl.LEQUAL);
     
     var texture = null;
-    create_texture('texture2.png');
+    create_texture('texture1.png');
+
+    var count = 0;
 
     (function() {
-
-        gl.clearColor(0.0,0.7,0.7,1.0);
+                                   
+        gl.clearColor(0.0,0.0,0.0,1.0);
         gl.clearDepth(1.0);
         gl.clearStencil(0);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
 
-        m.lookAt([0.0, 0.0, 5.0], [0, 0, 0], [0, 1, 0], vMatrix);
+        count++;
+        var rad = (count % 360) * Math.PI / 180;
+
+        m.lookAt([0.0, 0.0, 10.0], [0, 0, 0], [0, 1, 0], vMatrix);
         m.perspective(45, c.width / c.height, 0.1, 100, pMatrix);
         var qMatrix = m.identity(m.create());
         q.toMatIV(qt, qMatrix);
@@ -135,36 +117,65 @@ onload = function(){
 
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.uniform1i(uniLocation[3], 0);
 
         gl.enable(gl.STENCIL_TEST);
 
+        gl.colorMask(false, false, false, false);
+        gl.depthMask(false);
+
         gl.stencilFunc(gl.ALWAYS, 1, ~0);
         gl.stencilOp(gl.KEEP, gl.REPLACE, gl.REPLACE);
-        render([-0.25, 0.25, -0.5]);
 
-        gl.stencilFunc(gl.ALWAYS, 0, ~0);
-        gl.stencilOp(gl.KEEP, gl.INCR, gl.INCR);
-        render([0.0, 0.0, 0.0]);
+        set_attribute(tVBOList, attLocation, attStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tIndex);
 
-        gl.stencilFunc(gl.EQUAL, 2, ~0);
-        gl.stencilOp(gl.KEEP, gl.INCR, gl.INCR);
-        render([0.25, -0.25, 0.5]);
+        m.identity(mMatrix);
+        m.rotate(mMatrix, rad, [0.0, 1.0, 1.0], mMatrix);
+        m.multiply(tmpMatrix, mMatrix, mvpMatrix);
 
-        function render(tr) {
-            m.identity(mMatrix);
-            m.translate(mMatrix, [tr[0], tr[1], tr[2]], mMatrix);
-            m.multiply(tmpMatrix, mMatrix, mvpMatrix);
-            m.inverse(mMatrix, invMatrix);
+        gl.uniformMatrix4fv(uniLocation[0], false, mvpMatrix);
+        gl.uniform1i(uniLocation[3], false);
+        gl.uniform1i(uniLocation[5], false);
+        gl.uniform1i(uniLocation[6], true);
+        gl.drawElements(gl.TRIANGLES, torusData.i.length, gl.UNSIGNED_SHORT, 0);
+       
+        gl.colorMask(true, true, true, true);
+        gl.depthMask(true);
 
-            gl.uniformMatrix4fv(uniLocation[0], false, mvpMatrix);
-            gl.uniformMatrix4fv(uniLocation[1], false, invMatrix);
-            gl.uniform3fv(uniLocation[2], lightDirection);
-            gl.drawElements(gl.TRIANGLES, index.length, gl.UNSIGNED_SHORT, 0);
-        }
+        gl.stencilFunc(gl.EQUAL, 0, ~0);
+        gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+
+        set_attribute(sVBOList, attLocation, attStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sIndex);
+
+        m.identity(mMatrix);
+        m.scale(mMatrix, [50.0, 50.0, 50.0], mMatrix);
+        m.multiply(tmpMatrix, mMatrix, mvpMatrix);
+
+        gl.uniformMatrix4fv(uniLocation[0], false, mvpMatrix);
+        gl.uniform1i(uniLocation[3], false);
+        gl.uniform1i(uniLocation[4], 0);
+        gl.uniform1i(uniLocation[5], true);
+        gl.uniform1i(uniLocation[6], false);
+        gl.drawElements(gl.TRIANGLES, sphereData.i.length, gl.UNSIGNED_SHORT, 0);
 
         gl.disable(gl.STENCIL_TEST);
 
+        set_attribute(tVBOList, attLocation, attStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tIndex);
+
+        m.identity(mMatrix);
+        m.rotate(mMatrix, rad, [0.0, 1.0, 1.0], mMatrix);
+        m.multiply(tmpMatrix, mMatrix, mvpMatrix);
+
+        gl.uniformMatrix4fv(uniLocation[0], false, mvpMatrix);
+        gl.uniformMatrix4fv(uniLocation[1], false, invMatrix);
+        gl.uniform3fv(uniLocation[2], lightDirection);
+        gl.uniform1i(uniLocation[3], true);
+        gl.uniform1i(uniLocation[5], false);
+        gl.uniform1i(uniLocation[6], false);
+        gl.drawElements(gl.TRIANGLES, torusData.i.length, gl.UNSIGNED_SHORT, 0);
+        
         // コンテキストの再描画
         gl.flush();
 
@@ -281,106 +292,6 @@ onload = function(){
             gl.enableVertexAttribArray(attL[i]);
             gl.vertexAttribPointer(attL[i], attS[i], gl.FLOAT, false, 0, 0);
         }
-    }
-
-    function torus(row, column, irad, orad, color){
-        var pos = new Array(), nor = new Array(),
-            col = new Array(), idx = new Array();
-
-        for(var i = 0; i <= row; ++i){
-            var r = Math.PI * 2 / row * i;
-            var rr = Math.cos(r);
-            var ry = Math.sin(r);
-            
-            for(var ii = 0; ii <= column; ++ii) {
-                var tr = Math.PI * 2 / column * ii; 
-                var tx = (rr * irad + orad) * Math.cos(tr);
-                var ty = ry * irad;
-                var tz = (rr * irad + orad) * Math.sin(tr);
-                var rx = rr * Math.cos(tr);
-                var rz = rr * Math.sin(tr);
-                pos.push(tx, ty, tz);
-                nor.push(rx, ry, rz);
-                if(color) {
-                    var tc = color;
-                } else {
-                    tc = hsva(360 / column * ii, 1, 1, 1);
-                }
-                col.push(tc[0], tc[1], tc[2], tc[3]);
-            }
-        }
-
-        for(i = 0; i < row; ++i) {
-            for(ii = 0; ii < column; ++ii) {
-                r = (column + 1) *i + ii;
-                idx.push(r, r + column + 1, r + 1);
-                idx.push(r + column + 1, r + column + 2, r +1);
-            }
-        }
-    
-        return { p: pos, n : nor, c : col, i : idx  };
-    }
-
-    function hsva(h, s, v, a) {
-        if(s > 1 || v > 1 || a > 1) { return;  } 
-
-        var th = h % 360;
-        var i = Math.floor(th / 60);
-        var f = th / 60 - i;
-        var m = v * (1 - s);
-        var n = v * (1 - s - f);
-        var k = v * (1 - s * (1 - f));
-        var color = new Array();
-        if(!s > 0 && !s < 0) {
-            color.push(v, v, v, a);
-        } else {
-            var r = new Array(v, n, m, m, k, v);
-            var g = new Array(k, v, v, n, m, m);
-            var b = new Array(m, m, k, v, v, n);
-            color.push(r[i], g[i], b[i], a);
-        }
-
-        return color;
-    }
-
-    function sphere(row, column, rad, color) {
-        var pos = new Array(), nor = new Array(),
-            col = new Array(), idx = new Array();
-
-        for(var i =0; i <= row; ++i) {
-            var r= Math.PI / row * i;
-            var ry = Math.cos(r);
-            var rr = Math.sin(r);
-
-            for(var ii =0; ii <= column; ++ii) {
-                var tr = Math.PI * 2 /column * ii;
-                var tx = rr * rad * Math.cos(tr);
-                var ty = ry * rad;
-                var tz = rr * rad * Math.sin(tr);
-                var rx = rr * Math.cos(tr);
-                var rz = rr * Math.sin(tr);
-                
-                if(color) {
-                    var tc = color;
-                } else {
-                    tc = hsva(360 / row * i , 1, 1, 1);
-                }
-                pos.push(tx, ty, tz);
-                nor.push(rx, ry, rz);
-                col.push(tc[0], tc[1], tc[2], tc[3]);
-            }
-        }
-
-        r= 0;
-        for(i = 0; i< row; ++i) {
-            for(ii = 0; ii < column; ++ii) {
-                r = (column + 1) * i +ii;
-                idx.push(r, r+1, r+ column + 2);
-                idx.push(r, r+ column + 2, r + column + 1);
-            }
-        }
-
-        return { p: pos, n : nor, c : col, i : idx };
     }
 
     function create_texture(source) {
