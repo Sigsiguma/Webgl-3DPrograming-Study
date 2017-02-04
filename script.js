@@ -21,7 +21,7 @@ function mouseMove(e) {
 
 onload = function(){
     // canvasエレメントを取得
-    var  c = document.getElementById('canvas');
+    c = document.getElementById('canvas');
     c.width = 500;
     c.height = 300;
 
@@ -82,6 +82,8 @@ onload = function(){
     var uniLocation = new Array();
     uniLocation[0] = gl.getUniformLocation(prg, 'mvpMatrix');
     uniLocation[1] = gl.getUniformLocation(prg, 'pointSize');
+    uniLocation[2] = gl.getUniformLocation(prg, 'texture');
+    uniLocation[3] = gl.getUniformLocation(prg, 'useTexture');
 
     // minMatrix.js を用いた行列関連処理
     // matIVオブジェクトを生成
@@ -96,9 +98,15 @@ onload = function(){
     var qMatrix   = m.identity(m.create());
 
     var count = 0;
+
+    var texture = null;
+    create_texture('texture.png');
     
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
+    gl.enable(gl.BLEND);
+
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE);
 
     (function() {
 
@@ -121,12 +129,17 @@ onload = function(){
 
         var pointSize = ePointSize.value / 10;
 
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+
         set_attribute(pVBOList, attLocation, attStride);
         m.identity(mMatrix);
         m.rotate(mMatrix, rad, [0, 1, 0], mMatrix);
         m.multiply(tmpMatrix, mMatrix, mvpMatrix);
         gl.uniformMatrix4fv(uniLocation[0], false, mvpMatrix);
         gl.uniform1f(uniLocation[1], pointSize);
+        gl.uniform1i(uniLocation[2], 0);
+        gl.uniform1i(uniLocation[3], true);
         gl.drawArrays(gl.POINTS, 0, pointSphere.p.length / 3);
 
         var lineOption = 0;
@@ -140,6 +153,7 @@ onload = function(){
         m.scale(mMatrix, [3.0, 3.0, 1.0], mMatrix);
         m.multiply(tmpMatrix, mMatrix, mvpMatrix);
         gl.uniformMatrix4fv(uniLocation[0], false, mvpMatrix);
+        gl.uniform1i(uniLocation[3], false);
         gl.drawArrays(lineOption, 0, position.length / 3);
 
         // コンテキストの再描画
@@ -358,5 +372,25 @@ onload = function(){
         }
 
         return { p: pos, n : nor, c : col, i : idx };
+    }
+
+    function create_texture(source) {
+        var img = new Image();
+
+        img.onload = function() {
+            var tex = gl.createTexture();
+            
+            gl.bindTexture(gl.TEXTURE_2D, tex);
+
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA , gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+            gl.generateMipmap(gl.TEXTURE_2D);
+
+            gl.bindTexture(gl.TEXTURE_2D, null);
+
+            texture = tex;
+        };
+
+        img.src = source;
     }
 };
