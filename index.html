@@ -41,10 +41,66 @@
                 vec4 smpColor = texture2D(texture, vTextureCoord);
                 gl_FragColor = vColor * smpColor;
             }
-
         </script>
+
+        <script id="bvs" type="x-shader/x-vertex">
+            attribute vec3 position;
+            attribute vec4 color;
+            uniform   mat4 mvpMatrix;
+            varying   vec4 vColor;
+
+            void main(void) {
+                vColor = color;
+                gl_Position = mvpMatrix * vec4(position, 1.0);
+            }
+        </script>
+        
+        <script id="bfs" type="x-shader/x-fragment">
+            precision mediump float;
+            
+            uniform sampler2D texture;
+            uniform bool      useBlur;
+            varying vec4 vColor;
+
+            void main(void) {
+                vec2 tFrag = vec2(1.0 / 256.0);
+                vec4 destColor = texture2D(texture, gl_FragCoord.st * tFrag);
+                if(useBlur) {
+                    destColor *= 0.36;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2(-1.0, 1.0)) * tFrag) * 0.04;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 0.0, 1.0)) * tFrag) * 0.04;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 1.0, 1.0)) * tFrag) * 0.04;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2(-1.0, 0.0)) * tFrag) * 0.04;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 1.0, 0.0)) * tFrag) * 0.04;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2(-1.0,-1.0)) * tFrag) * 0.04;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 0.0,-1.0)) * tFrag) * 0.04;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 1.0,-1.0)) * tFrag) * 0.04;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2(-2.0, 2.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2(-1.0, 2.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 0.0, 2.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 1.0, 2.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 2.0, 2.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2(-2.0, 1.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 2.0, 1.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2(-2.0, 0.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 2.0, 0.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2(-2.0,-1.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 2.0,-1.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2(-2.0,-2.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2(-1.0,-2.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 0.0,-2.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 1.0,-2.0)) * tFrag) * 0.02;
+                    destColor += texture2D(texture, (gl_FragCoord.st + vec2( 2.0,-2.0)) * tFrag) * 0.02;
+                }
+                gl_FragColor = vColor * destColor;
+            }
+        </script>
+
     </head>
     <body>
         <canvas id="canvas"></canvas>
+        <p>
+            <input id="blur" type="checkbox"> blur filter
+        </p>
     </body>
 </html>
