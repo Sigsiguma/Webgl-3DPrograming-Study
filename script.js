@@ -22,11 +22,9 @@ onload = function(){
     // canvasエレメントを取得
     c = document.getElementById('canvas');
     c.width = 500;
-    c.height = 300;
+    c.height = 500;
 
     c.addEventListener('mousemove', mouseMove, true);
-
-    var eRange = document.getElementById('range');
 
     // webglコンテキストを取得
     var gl = c.getContext('webgl') || c.getContext('experimental-webgl');
@@ -39,35 +37,41 @@ onload = function(){
     attLocation[0] = gl.getAttribLocation(prg, 'position');
     attLocation[1] = gl.getAttribLocation(prg, 'normal');
     attLocation[2] = gl.getAttribLocation(prg, 'color');
-    attLocation[3] = gl.getAttribLocation(prg, 'textureCoord');
 
     // attributeの要素数(この場合は xyz の3要素)
     var attStride = new Array();
     attStride[0] = 3;
     attStride[1] = 3;
     attStride[2] = 4;
-    attStride[3] = 2;
 
-    var sphereData = sphere(64, 64, 1.0);
+    var cubeData = cube(2.0, [1.0, 1.0, 1.0, 1.0]);
+    var cPosition = create_vbo(cubeData.p);
+    var cNormal   = create_vbo(cubeData.n);
+    var cColor    = create_vbo(cubeData.c);
+    var cVBOList  = [cPosition, cNormal, cColor];
+    var cIndex    = create_ibo(cubeData.i);
+
+    var sphereData = sphere(64, 64, 2.5, [1.0, 1.0, 1.0, 1.0]);
     var sPosition = create_vbo(sphereData.p);
     var sNormal = create_vbo(sphereData.n);
     var sColor = create_vbo(sphereData.c);
-    var sTextureCoord = create_vbo(sphereData.t);
-    var sVBOList = [sPosition, sNormal, sColor, sTextureCoord];
+    var sVBOList = [sPosition, sNormal, sColor];
     var sIndex = create_ibo(sphereData.i);
-    set_attribute(sVBOList, attLocation, attStride);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sIndex);
+
+    var torusData = torus(64, 64, 1.0, 2.0, [1.0, 1.0, 1.0, 1.0]);
+    var tPosition = create_vbo(torusData.p);
+    var tNormal   = create_vbo(torusData.n);
+    var tColor    = create_vbo(torusData.c);
+    var tVBOList  = [tPosition, tNormal, tColor];
+    var tIndex    = create_ibo(torusData.i);
     
     // uniformLocationの取得
     var uniLocation = new Array();
     uniLocation[0] = gl.getUniformLocation(prg, 'mMatrix');
     uniLocation[1] = gl.getUniformLocation(prg, 'mvpMatrix');
-    uniLocation[2] = gl.getUniformLocation(prg, 'invMatrix');
-    uniLocation[3] = gl.getUniformLocation(prg, 'lightPosition');
-    uniLocation[4] = gl.getUniformLocation(prg, 'eyePosition');
-    uniLocation[5] = gl.getUniformLocation(prg, 'texture0');
-    uniLocation[6] = gl.getUniformLocation(prg, 'texture1');
-    uniLocation[7] = gl.getUniformLocation(prg, 'height');
+    uniLocation[2] = gl.getUniformLocation(prg, 'eyePosition');
+    uniLocation[3] = gl.getUniformLocation(prg, 'cubeTexture');
+    uniLocation[4] = gl.getUniformLocation(prg, 'reflection');
 
     // minMatrix.js を用いた行列関連処理
     // matIVオブジェクトを生成
@@ -79,19 +83,29 @@ onload = function(){
     var pMatrix = m.identity(m.create());
     var tmpMatrix = m.identity(m.create());
     var mvpMatrix = m.identity(m.create());
-    var invMatrix = m.identity(m.create());
 
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
     
-    var texture0 = null;
-    var texture1 = null;
-    
-    create_texture('texture0.png', 0);
-    create_texture('texture1.png', 1);
+    var cubeTexture = null;
 
-    var lightPosition = [-10.0, 10.0, 10.0];
-    var eyePosition = [0.0, 0.0, 5.0];
+    var cubeSource = new Array( 'cube_PX.png',
+                                'cube_PY.png',
+                                'cube_PZ.png',
+                                'cube_NX.png',
+                                'cube_NY.png',
+                                'cube_NZ.png');
+
+    var cubeTarget = new Array(gl.TEXTURE_CUBE_MAP_POSITIVE_X,
+                               gl.TEXTURE_CUBE_MAP_POSITIVE_Y,
+                               gl.TEXTURE_CUBE_MAP_POSITIVE_Z,
+                               gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
+                               gl.TEXTURE_CUBE_MAP_NEGATIVE_Y,
+                               gl.TEXTURE_CUBE_MAP_NEGATIVE_Z);
+    
+    create_cube_texture(cubeSource, cubeTarget);
+
+    var eyePosition = [0.0, 0.0, 20.0];
 
     var count = 0;
 
@@ -99,40 +113,58 @@ onload = function(){
                                    
         count++;
         var rad = (count % 360) * Math.PI / 180;
+        var rad2 = ((count + 180) % 360) * Math.PI / 180;
 
         gl.clearColor(0.0,0.0,0.0,1.0);
         gl.clearDepth(1.0);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-        var hScale = eRange.value / 10000;
-
         var camUp = new Array();
-        q.toVecIII([0.0, 0.0, 5.0], qt, eyePosition);
+        q.toVecIII([0.0, 0.0, 20.0], qt, eyePosition);
         q.toVecIII([0.0, 1.0, 0.0], qt, camUp);
         m.lookAt(eyePosition, [0, 0, 0], camUp, vMatrix);
-        m.perspective(45, c.width / c.height, 0.1, 100, pMatrix);
+        m.perspective(45, c.width / c.height, 0.1, 200, pMatrix);
         m.multiply(pMatrix, vMatrix, tmpMatrix);
 
+        set_attribute(cVBOList, attLocation, attStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cIndex);
+
         m.identity(mMatrix);
-        m.rotate(mMatrix, -rad, [0, 1, 0], mMatrix);
+        m.scale(mMatrix, [100.0, 100.0, 100.0], mMatrix);
         m.multiply(tmpMatrix, mMatrix, mvpMatrix);
-        m.inverse(mMatrix, invMatrix);
         gl.uniformMatrix4fv(uniLocation[0], false, mMatrix);
         gl.uniformMatrix4fv(uniLocation[1], false, mvpMatrix);
-        gl.uniformMatrix4fv(uniLocation[2], false, invMatrix);
-        gl.uniform3fv(uniLocation[3], lightPosition);
-        gl.uniform3fv(uniLocation[4], eyePosition);
-
+        gl.uniform3fv(uniLocation[2], eyePosition);
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, texture0);
-        gl.uniform1i(uniLocation[5], 0);
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeTexture);
+        gl.uniform1i(uniLocation[3], 0);
+        gl.uniform1i(uniLocation[4], false);
+        gl.drawElements(gl.TRIANGLES, cubeData.i.length, gl.UNSIGNED_SHORT, 0);
 
-        gl.activeTexture(gl.TEXTURE1);
-        gl.bindTexture(gl.TEXTURE_2D, texture1);
-        gl.uniform1i(uniLocation[6], 1);
+        set_attribute(sVBOList, attLocation, attStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sIndex);
 
-        gl.uniform1f(uniLocation[7], hScale);
+        m.identity(mMatrix);
+        m.rotate(mMatrix, rad, [0, 0, 1], mMatrix);
+        m.translate(mMatrix, [5.0, 0.0, 0.0], mMatrix);
+        m.multiply(tmpMatrix, mMatrix, mvpMatrix);
+        gl.uniformMatrix4fv(uniLocation[0], false, mMatrix);
+        gl.uniformMatrix4fv(uniLocation[1], false, mvpMatrix);
+        gl.uniform1i(uniLocation[4], true);
         gl.drawElements(gl.TRIANGLES, sphereData.i.length, gl.UNSIGNED_SHORT, 0);
+
+        set_attribute(tVBOList, attLocation, attStride);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, tIndex);
+
+        m.identity(mMatrix);
+        m.rotate(mMatrix, rad2, [0, 0, 1], mMatrix);
+        m.translate(mMatrix, [5.0, 0.0, 0.0], mMatrix);
+        m.rotate(mMatrix, rad, [1, 0, 1], mMatrix);
+        m.multiply(tmpMatrix, mMatrix, mvpMatrix);
+        gl.uniformMatrix4fv(uniLocation[0], false, mMatrix);
+        gl.uniformMatrix4fv(uniLocation[1], false, mvpMatrix);
+        gl.uniform1i(uniLocation[4], true);
+        gl.drawElements(gl.TRIANGLES, torusData.i.length, gl.UNSIGNED_SHORT, 0);
 
         // コンテキストの再描画
         gl.flush();
@@ -283,6 +315,57 @@ onload = function(){
         };
 
         img.src = source;
+    }
+
+    function create_cube_texture(source, target) {
+        
+        var cImg = new Array();
+
+        for(var i = 0; i < source.length; ++i) {
+            cImg[i] = new cubeMapImage();
+            cImg[i].data.src = source[i];
+        }
+
+        function cubeMapImage() {
+            this.data = new Image();
+
+            this.data.onload = function() {
+                this.imageDataLoaded = true;
+                checkLoaded();
+            };
+        }
+
+        function checkLoaded() {
+            if(cImg[0].data.imageDataLoaded &&
+               cImg[1].data.imageDataLoaded &&
+               cImg[2].data.imageDataLoaded &&
+               cImg[3].data.imageDataLoaded &&
+               cImg[4].data.imageDataLoaded &&
+               cImg[5].data.imageDataLoaded) {
+                generateCubeMap();
+            }
+        }
+
+        function generateCubeMap() {
+            var tex = gl.createTexture();
+
+            gl.bindTexture(gl.TEXTURE_CUBE_MAP, tex);
+
+            for(var j = 0; j < source.length; ++j) {
+                gl.texImage2D(target[j], 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cImg[j].data);
+            }
+
+            gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+
+            gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            cubeTexture = tex;
+
+            gl.bindTexture(gl.TEXTURE_CUBE_MAP, null);
+        }
     }
 
     function create_framebuffer(width, height) {
